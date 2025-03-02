@@ -5,31 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>硬幣遊戲</title>
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
         body {
             font-family: 'Arial', sans-serif;
             background-color: #f5f5f5;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 10px;
+            min-height: 100vh;
+            width: 100%;
         }
+        
         .game-container {
             background-color: #1a6c35;
             border-radius: 10px;
-            padding: 40px;
+            padding: 20px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
             margin-bottom: 20px;
             position: relative;
-            width: 700px;
-            height: 400px;
+            width: 100%;
+            max-width: 700px;
+            /* 使用寬高比來確保不同設備上的一致性 */
+            aspect-ratio: 7/4;
         }
-        .coin-area {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 20px;
-            padding: 20px;
-        }
+        
         .coin {
             width: 80px;
             height: 80px;
@@ -40,6 +45,7 @@
             touch-action: none; /* 防止觸摸時的瀏覽器默認行為 */
             will-change: transform, left, top; /* 提高性能 */
         }
+        
         .coin img {
             width: 100%;
             height: 100%;
@@ -48,19 +54,21 @@
             transition: transform 0.3s;
             backface-visibility: hidden; /* 使翻轉更流暢 */
             transform-style: preserve-3d;
-            draggable: false;
+            -webkit-user-drag: none; /* 阻止iOS上的預設拖動行為 */
+            pointer-events: none; /* 確保觸摸事件穿透到父元素 */
         }
+        
         .coin.dragging {
             z-index: 100;
         }
-        .coin img:hover {
-            transform: scale(1.05);
-        }
+        
         .controls {
             display: flex;
             gap: 20px;
             margin-top: 20px;
+            margin-bottom: 20px;
         }
+        
         button {
             padding: 12px 24px;
             font-size: 16px;
@@ -72,38 +80,50 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             -webkit-tap-highlight-color: transparent; /* 移除移動設備點擊高亮 */
         }
+        
         .start-btn {
             background-color: #4CAF50;
             color: white;
         }
+        
         .reset-btn {
             background-color: #f44336;
             color: white;
         }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        
+        button:active {
+            transform: scale(0.95);
         }
+        
         .title {
             color: #333;
-            margin-bottom: 20px;
+            margin: 15px 0;
             text-align: center;
-            font-size: 32px;
+            font-size: 28px;
         }
+        
         .instructions {
             background-color: #fff;
             padding: 15px;
             border-radius: 5px;
             margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            width: 700px;
+            width: 100%;
+            max-width: 700px;
         }
         
+        .instructions ul {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 5px;
+        }
+        
+        /* 響應式設計 */
         @media (max-width: 768px) {
-            .game-container {
-                width: 90%;
-                height: 350px;
-                padding: 20px;
+            .title {
+                font-size: 24px;
             }
             
             .coin {
@@ -111,8 +131,34 @@
                 height: 60px;
             }
             
+            button {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .title {
+                font-size: 20px;
+                margin: 10px 0;
+            }
+            
             .instructions {
-                width: 90%;
+                font-size: 14px;
+            }
+            
+            .coin {
+                width: 45px;
+                height: 45px;
+            }
+            
+            .controls {
+                gap: 10px;
+            }
+            
+            button {
+                padding: 8px 16px;
+                font-size: 14px;
             }
         }
     </style>
@@ -158,20 +204,37 @@
             let coins = [];
             let isShuffling = false;
             
+            // 計算基於容器大小的硬幣尺寸和間距
+            function calculateSizes() {
+                const containerRect = gameContainer.getBoundingClientRect();
+                const containerWidth = containerRect.width;
+                const containerHeight = containerRect.height;
+                
+                // 動態計算硬幣尺寸和間距
+                let coinSize = Math.min(containerWidth / 10, containerHeight / 5);
+                
+                // 移動設備上硬幣尺寸縮小
+                if (window.innerWidth <= 480) {
+                    coinSize = Math.min(containerWidth / 12, containerHeight / 6);
+                } else if (window.innerWidth <= 768) {
+                    coinSize = Math.min(containerWidth / 11, containerHeight / 5.5);
+                }
+                
+                const gapX = containerWidth / 6;
+                const gapY = containerHeight / 3;
+                const startX = (containerWidth - 4 * gapX) / 2;
+                const startY = (containerHeight - gapY) / 2;
+                
+                return { coinSize, startX, startY, gapX, gapY };
+            }
+            
             // 初始化硬幣
             function initializeCoins() {
                 gameContainer.innerHTML = '';
                 coins = [];
                 
-                // 依序排列硬幣（先4個正面，再6個反面）
-                const rows = 2;
+                const { coinSize, startX, startY, gapX, gapY } = calculateSizes();
                 const coinsPerRow = 5;
-                const coinWidth = 80;
-                const coinHeight = 80;
-                const startX = 100;
-                const startY = 100;
-                const gapX = 100;
-                const gapY = 120;
                 
                 for (let i = 0; i < totalCoins; i++) {
                     const row = Math.floor(i / coinsPerRow);
@@ -190,6 +253,10 @@
                     coinDiv.appendChild(coinImg);
                     gameContainer.appendChild(coinDiv);
                     
+                    // 應用計算出的尺寸
+                    coinDiv.style.width = `${coinSize}px`;
+                    coinDiv.style.height = `${coinSize}px`;
+                    
                     // 位置計算
                     const x = startX + col * gapX;
                     const y = startY + row * gapY;
@@ -207,22 +274,42 @@
                         type: isFront ? 'front' : 'back'
                     });
                     
-                    // 雙擊翻面
-                    coinDiv.addEventListener('dblclick', () => {
-                        flipCoin(coinDiv);
-                    });
-                    
-                    // 移動裝置雙擊支持
+                    // 雙擊翻面（使用自定義實現以提高移動裝置的兼容性）
                     let lastTap = 0;
-                    coinDiv.addEventListener('touchend', (e) => {
+                    let tapTimeout;
+                    
+                    // 點擊/觸摸處理
+                    function handleTap(e) {
+                        e.preventDefault(); // 防止默認行為
+                        
                         const currentTime = new Date().getTime();
                         const tapLength = currentTime - lastTap;
+                        
+                        // 清除任何現有的點擊超時
+                        clearTimeout(tapTimeout);
+                        
                         if (tapLength < 500 && tapLength > 0) {
+                            // 雙擊操作
                             flipCoin(coinDiv);
-                            e.preventDefault();
+                        } else {
+                            // 單擊操作 - 設置一個延遲，等待可能的第二次點擊
+                            tapTimeout = setTimeout(() => {
+                                // 單擊操作不需要做任何事
+                            }, 200);
                         }
+                        
                         lastTap = currentTime;
+                    }
+                    
+                    // 監聽點擊和觸摸
+                    coinDiv.addEventListener('mousedown', (e) => {
+                        // 只有在左鍵點擊時才執行雙擊檢測
+                        if (e.button === 0) {
+                            handleTap(e);
+                        }
                     });
+                    
+                    coinDiv.addEventListener('touchstart', handleTap, { passive: false });
                     
                     // 拖拽功能
                     makeDraggable(coinDiv);
@@ -233,70 +320,68 @@
             function makeDraggable(element) {
                 let offsetX, offsetY;
                 let isDragging = false;
-                
-                // 鼠標拖拽
-                element.addEventListener('mousedown', startDrag);
-                
-                // 觸摸拖拽
-                element.addEventListener('touchstart', (e) => {
-                    const touch = e.touches[0];
-                    const mouseEvent = new MouseEvent('mousedown', {
-                        clientX: touch.clientX,
-                        clientY: touch.clientY
-                    });
-                    startDrag(mouseEvent);
-                    e.preventDefault(); // 防止滾動
-                });
+                let startX, startY;
+                let isTap = true; // 用於區分點擊和拖動
                 
                 function startDrag(e) {
                     if (isShuffling) return; // 如果正在洗牌，則不允許拖拽
                     
-                    isDragging = true;
-                    element.classList.add('dragging');
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    
+                    startX = clientX;
+                    startY = clientY;
+                    isTap = true;
                     
                     const rect = element.getBoundingClientRect();
-                    offsetX = e.clientX - rect.left;
-                    offsetY = e.clientY - rect.top;
+                    offsetX = clientX - rect.left;
+                    offsetY = clientY - rect.top;
                     
-                    // 將點擊的硬幣置於頂層
                     element.style.zIndex = '100';
-                    
-                    // 添加過渡效果取消，使拖動更流暢
                     element.style.transition = 'none';
+                    
+                    // 添加事件監聽器
+                    if (e.type === 'mousedown') {
+                        document.addEventListener('mousemove', moveDrag);
+                        document.addEventListener('mouseup', endDrag);
+                    } else if (e.type === 'touchstart') {
+                        document.addEventListener('touchmove', moveDrag, { passive: false });
+                        document.addEventListener('touchend', endDrag);
+                        document.addEventListener('touchcancel', endDrag);
+                    }
                 }
                 
-                // 鼠標移動
-                document.addEventListener('mousemove', moveDrag);
-                
-                // 觸摸移動
-                document.addEventListener('touchmove', (e) => {
-                    const touch = e.touches[0];
-                    const mouseEvent = new MouseEvent('mousemove', {
-                        clientX: touch.clientX,
-                        clientY: touch.clientY
-                    });
-                    moveDrag(mouseEvent);
-                    e.preventDefault(); // 防止滾動
-                }, { passive: false });
-                
                 function moveDrag(e) {
+                    if (isShuffling) return;
+                    
+                    e.preventDefault(); // 防止頁面滾動
+                    
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    
+                    // 判斷是否是拖動而不是點擊
+                    const deltaX = Math.abs(clientX - startX);
+                    const deltaY = Math.abs(clientY - startY);
+                    
+                    if (deltaX > 5 || deltaY > 5) {
+                        isTap = false;
+                        isDragging = true;
+                        element.classList.add('dragging');
+                    }
+                    
                     if (!isDragging) return;
                     
                     // 計算新位置
-                    const x = e.clientX - offsetX;
-                    const y = e.clientY - offsetY;
-                    
-                    // 限制在遊戲容器內
                     const containerRect = gameContainer.getBoundingClientRect();
-                    const coinRect = element.getBoundingClientRect();
+                    const elementRect = element.getBoundingClientRect();
                     
                     const minX = 0;
                     const minY = 0;
-                    const maxX = containerRect.width - coinRect.width;
-                    const maxY = containerRect.height - coinRect.height;
+                    const maxX = containerRect.width - elementRect.width;
+                    const maxY = containerRect.height - elementRect.height;
                     
-                    let newX = x - containerRect.left;
-                    let newY = y - containerRect.top;
+                    let newX = clientX - containerRect.left - offsetX;
+                    let newY = clientY - containerRect.top - offsetY;
                     
                     newX = Math.max(minX, Math.min(newX, maxX));
                     newY = Math.max(minY, Math.min(newY, maxY));
@@ -305,27 +390,35 @@
                     element.style.top = `${newY}px`;
                 }
                 
-                // 鼠標釋放
-                document.addEventListener('mouseup', endDrag);
-                
-                // 觸摸結束
-                document.addEventListener('touchend', endDrag);
-                document.addEventListener('touchcancel', endDrag);
-                
-                function endDrag() {
-                    if (!isDragging) return;
+                function endDrag(e) {
+                    if (e.type === 'mouseup') {
+                        document.removeEventListener('mousemove', moveDrag);
+                        document.removeEventListener('mouseup', endDrag);
+                    } else if (e.type === 'touchend' || e.type === 'touchcancel') {
+                        document.removeEventListener('touchmove', moveDrag);
+                        document.removeEventListener('touchend', endDrag);
+                        document.removeEventListener('touchcancel', endDrag);
+                    }
                     
-                    isDragging = false;
-                    element.classList.remove('dragging');
-                    
-                    // 恢復過渡效果
-                    element.style.transition = 'transform 0.2s';
-                    
-                    // 恢復正常的z-index
-                    setTimeout(() => {
-                        element.style.zIndex = '1';
-                    }, 200);
+                    if (isDragging) {
+                        isDragging = false;
+                        element.classList.remove('dragging');
+                        
+                        // 恢復過渡效果
+                        element.style.transition = 'transform 0.2s';
+                        
+                        // 恢復正常的z-index
+                        setTimeout(() => {
+                            element.style.zIndex = '1';
+                        }, 200);
+                    }
                 }
+                
+                // 添加鼠標事件
+                element.addEventListener('mousedown', startDrag);
+                
+                // 添加觸摸事件
+                element.addEventListener('touchstart', startDrag, { passive: false });
             }
             
             // 翻轉硬幣
@@ -354,26 +447,32 @@
                 }, 150);
             }
             
-            // 隨機打亂硬幣 (使用GSAP風格的流暢動畫)
+            // 隨機打亂硬幣
             function shuffleCoins() {
-                // 防止重複點擊
                 if (isShuffling) return;
                 
                 isShuffling = true;
                 startBtn.disabled = true;
                 
-                // 保存當前硬幣位置
-                const originalPositions = coins.map(coin => ({
-                    x: parseInt(coin.element.style.left),
-                    y: parseInt(coin.element.style.top)
-                }));
+                const containerRect = gameContainer.getBoundingClientRect();
+                const containerWidth = containerRect.width;
+                const containerHeight = containerRect.height;
                 
-                // 隨機重新排列位置
-                const shuffledPositions = [...originalPositions];
-                for (let i = shuffledPositions.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [shuffledPositions[i], shuffledPositions[j]] = [shuffledPositions[j], shuffledPositions[i]];
-                }
+                // 隨機生成新位置
+                const newPositions = coins.map(coin => {
+                    const coinElement = coin.element;
+                    const coinRect = coinElement.getBoundingClientRect();
+                    
+                    // 確保硬幣不會超出容器邊界
+                    const maxX = containerWidth - coinRect.width;
+                    const maxY = containerHeight - coinRect.height;
+                    
+                    // 生成隨機位置
+                    const randomX = Math.floor(Math.random() * maxX);
+                    const randomY = Math.floor(Math.random() * maxY);
+                    
+                    return { x: randomX, y: randomY };
+                });
                 
                 // 為每個硬幣設置隨機延遲，使動畫更自然
                 coins.forEach((coin, index) => {
@@ -382,13 +481,13 @@
                     
                     // 先稍微上升
                     setTimeout(() => {
-                        coin.element.style.transform = 'translateY(-30px) scale(1.05)';
+                        coin.element.style.transform = 'translateY(-20px) scale(1.05)';
                     }, 10 + delay);
                     
                     // 然後移動到新位置
                     setTimeout(() => {
-                        coin.element.style.left = `${shuffledPositions[index].x}px`;
-                        coin.element.style.top = `${shuffledPositions[index].y}px`;
+                        coin.element.style.left = `${newPositions[index].x}px`;
+                        coin.element.style.top = `${newPositions[index].y}px`;
                         coin.element.style.transform = 'translateY(0) scale(1)';
                     }, 300 + delay);
                 });
@@ -403,6 +502,13 @@
                 }, 1200);
             }
             
+            // 重新調整大小時重新計算所有硬幣位置
+            function handleResize() {
+                if (!isShuffling) {
+                    initializeCoins();
+                }
+            }
+            
             // 初始化
             initializeCoins();
             
@@ -410,7 +516,7 @@
             startBtn.addEventListener('click', shuffleCoins);
             resetBtn.addEventListener('click', initializeCoins);
             
-            // 添加觸摸事件支持
+            // 添加觸摸事件支持（確保不會同時觸發點擊和觸摸）
             startBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 shuffleCoins();
@@ -419,6 +525,13 @@
             resetBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 initializeCoins();
+            });
+            
+            // 監聽視窗大小變化
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(handleResize, 250);
             });
         });
     </script>
